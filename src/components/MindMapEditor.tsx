@@ -6,18 +6,37 @@ import { saveAs } from "file-saver";
 
 // 使用ES模块导入Markmap
 import * as markmapView from "markmap-view";
-const Markmap = (markmapView as any).Markmap;
+const Markmap = (markmapView as unknown as { Markmap: unknown }).Markmap as unknown as new (...args: unknown[]) => MarkmapInstance;
 
 interface Props {
   markdown: string;
   showDownloadBtn?: boolean;
 }
 
+interface MindMapEditorRef {
+  downloadSvg: () => void;
+  downloadPng: () => void;
+  downloadJpg: () => void;
+  downloadXmind: () => void;
+}
+
+interface MarkmapInstance {
+  fit: () => void;
+  setData: (data: unknown) => void;
+}
+
+interface XMindTopic {
+  title: string;
+  children: {
+    attached: XMindTopic[];
+  };
+}
+
 const transformer = new Transformer();
 
-const MindMapEditor = forwardRef(({ markdown, showDownloadBtn }: Props, ref) => {
+const MindMapEditor = forwardRef<MindMapEditorRef, Props>(({ markdown, showDownloadBtn }, ref) => {
   const svgRef = useRef<SVGSVGElement>(null);
-  const markmapInstance = useRef<any>(null);
+  const markmapInstance = useRef<MarkmapInstance | null>(null);
 
   // 下载菜单
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -212,43 +231,101 @@ const MindMapEditor = forwardRef(({ markdown, showDownloadBtn }: Props, ref) => 
   };
 
   const downloadXmind = () => {
-    // 导出为XMind支持的Markdown格式
-    // 头部加上#mindmap
-    const xmindContent = `#mindmap\n${markdown.trim()}`;
-    const blob = new Blob([xmindContent], { type: "text/markdown" });
-    saveAs(blob, "mindmap.xmind.md");
+    try {
+      // 创建XMind格式的数据
+      const xmindData = {
+        rootTopic: {
+          title: "思维导图",
+          children: {
+            attached: []
+          }
+        }
+      };
+
+      // 将Markdown转换为XMind结构
+      const lines = markdown.split('\n');
+      const stack: XMindTopic['children']['attached'][] = [xmindData.rootTopic.children.attached];
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+
+        // 计算层级
+        const level = (line.match(/^(\s*)/)?.[1].length || 0) / 2;
+        const content = trimmedLine.replace(/^[-*+]\s*/, '');
+
+        if (content) {
+          const topic: XMindTopic = { title: content, children: { attached: [] } };
+
+          // 根据层级添加到正确位置
+          while (stack.length > level + 1) {
+            stack.pop();
+          }
+
+          if (stack.length === level + 1) {
+            stack[stack.length - 1].push(topic);
+            stack.push(topic.children.attached);
+          }
+        }
+      }
+
+      // 转换为XMind文件格式
+      const xmindContent = JSON.stringify(xmindData, null, 2);
+      const blob = new Blob([xmindContent], { type: "application/json" });
+      saveAs(blob, "mindmap.xmind");
+      console.log('XMind导出成功');
+    } catch (error) {
+      console.error('XMind导出失败:', error);
+    }
   };
 
+  // 暴露方法给父组件
   useImperativeHandle(ref, () => ({
     downloadSvg,
     downloadPng,
     downloadJpg,
-    downloadXmind,
+    downloadXmind
   }));
 
   useEffect(() => {
-    if (svgRef.current) {
-      const { root } = transformer.transform(markdown);
-      if (!markmapInstance.current) {
-        markmapInstance.current = Markmap.create(svgRef.current, undefined, root);
-      } else {
-        markmapInstance.current.setData(root);
-        markmapInstance.current.fit();
+    if (svgRef.current && markdown) {
+      try {
+        // 转换Markdown为思维导图数据
+        const { root } = transformer.transform(markdown);
+        
+        // 创建或更新Markmap实例
+        if (!markmapInstance.current) {
+          markmapInstance.current = new Markmap(svgRef.current, {
+            autoFit: true,
+            zoom: {
+              minScale: 0.1,
+              maxScale: 3
+            }
+          });
+        }
+        
+        // 设置数据
+        if (markmapInstance.current) {
+          markmapInstance.current.setData(root);
+        }
+      } catch (error) {
+        console.error('思维导图渲染失败:', error);
       }
     }
   }, [markdown]);
 
   return (
-    <Box>
-      <svg ref={svgRef} style={{ width: "100%", height: "600px" }} />
+    <Box sx={{ width: "100%", height: "100%", position: "relative" }}>
+      <svg ref={svgRef} style={{ width: "100%", height: "100%" }} />
       {showDownloadBtn && (
-        <>
+        <Box sx={{ position: "absolute", top: 10, right: 10 }}>
           <Button
-            variant="outlined"
             onClick={handleMenuClick}
-            sx={{ mt: 2 }}
+            variant="contained"
+            size="small"
+            sx={{ bgcolor: "#1976d2", color: "#fff" }}
           >
-            下载脑图
+            下载
           </Button>
           <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose}>
             <MenuItem onClick={() => { downloadSvg(); handleMenuClose(); }}>SVG</MenuItem>
@@ -256,10 +333,12 @@ const MindMapEditor = forwardRef(({ markdown, showDownloadBtn }: Props, ref) => 
             <MenuItem onClick={() => { downloadJpg(); handleMenuClose(); }}>JPG</MenuItem>
             <MenuItem onClick={() => { downloadXmind(); handleMenuClose(); }}>XMind</MenuItem>
           </Menu>
-        </>
+        </Box>
       )}
     </Box>
   );
 });
+
+MindMapEditor.displayName = 'MindMapEditor';
 
 export default MindMapEditor; 

@@ -2,11 +2,8 @@ import { searchToMarkdownOutline } from './deepseek';
 
 // 先将所有"│"替换为4个空格，再用空格缩进分层，兼容所有树形符号+空格混合
 export function smartTextToMarkdown(text: string): string {
-  console.log('输入文本:', text);
-  
   // 如果本身就是markdown列表，直接返回
   if (/^\s*[-*+]\s+|^\s*\d+\.\s+/m.test(text)) {
-    console.log('检测到markdown列表，直接返回');
     return text;
   }
   
@@ -14,10 +11,9 @@ export function smartTextToMarkdown(text: string): string {
   const preprocessed = text.replace(/│/g, '    ');
   
   const lines = preprocessed.split(/\r?\n/);
-  console.log('分割后的行数:', lines.length);
-  let result: string[] = [];
+  const result: string[] = [];
   
-  for (let rawLine of lines) {
+  for (const rawLine of lines) {
     let content = rawLine.trim();
     if (!content) continue;
     
@@ -30,19 +26,15 @@ export function smartTextToMarkdown(text: string): string {
     content = content.replace(/^([├└]──|(\|[ \t]*[—\-＿_]+))\s*/, '');
     
     const markdownLine = `${"  ".repeat(level)}- ${content}`;
-    console.log(`生成markdown行: '${markdownLine}'`);
     result.push(markdownLine);
   }
   
   // 如果没有生成任何结果，原样返回
   if (result.length === 0) {
-    console.log('没有生成任何结果，原样返回');
     return text;
   }
   
-  const finalResult = result.join("\n");
-  console.log('最终结果:', finalResult);
-  return finalResult;
+  return result.join("\n");
 }
 
 // LLM辅助的树形文本解析

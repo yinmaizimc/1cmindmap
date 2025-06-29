@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { Box, Typography, Paper, Button, TextField, Menu, MenuItem, CircularProgress } from "@mui/material";
+import { Box, Typography, Paper, Button, TextField, Menu, MenuItem, CircularProgress, Alert, Snackbar } from "@mui/material";
 import MarkdownIt from "markdown-it";
 import MindMapEditor from "./components/MindMapEditor";
 import { smartTextToMarkdown, smartTextToMarkdownWithLLM } from "./utils/smartTextToMarkdown";
@@ -24,14 +24,23 @@ const CherryOutlineLogo = () => (
   </svg>
 );
 
+interface MindMapEditorRef {
+  downloadSvg: () => void;
+  downloadPng: () => void;
+  downloadJpg: () => void;
+  downloadXmind: () => void;
+}
+
 export default function App() {
   const [input, setInput] = useState("");
   const [markdown, setMarkdown] = useState("");
   const [mdEdit, setMdEdit] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [isLLMLoading, setIsLLMLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [showError, setShowError] = useState(false);
   const markdownRef = useRef<string>("");
-  const mindMapEditorRef = useRef<any>(null);
+  const mindMapEditorRef = useRef<MindMapEditorRef>(null);
 
   // 下载脑图菜单
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -47,6 +56,12 @@ export default function App() {
     if (type === "jpg") mindMapEditorRef.current.downloadJpg();
     if (type === "xmind") mindMapEditorRef.current.downloadXmind();
     handleMenuClose();
+  };
+
+  // 显示错误信息
+  const showErrorMessage = (message: string) => {
+    setErrorMessage(message);
+    setShowError(true);
   };
 
   // 智能文本转Markdown
@@ -68,8 +83,10 @@ export default function App() {
       setMarkdown(md);
       setMdEdit(md);
       markdownRef.current = md;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('LLM解析失败:', error);
+      const errorMessage = error instanceof Error ? error.message : 'AI解析失败，请稍后重试';
+      showErrorMessage(errorMessage);
     } finally {
       setIsLLMLoading(false);
     }
@@ -84,17 +101,33 @@ export default function App() {
 
   // 下载Markdown
   const handleDownloadMarkdown = () => {
-    const blob = new Blob([markdownRef.current], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "mindmap.md";
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = new Blob([markdownRef.current], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "mindmap.md";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      showErrorMessage('下载失败，请稍后重试');
+    }
   };
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f5f5f7", position: "relative", px: 6 }}>
+      {/* 错误提示 */}
+      <Snackbar 
+        open={showError} 
+        autoHideDuration={6000} 
+        onClose={() => setShowError(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setShowError(false)} severity="error" sx={{ width: '100%' }}>
+          {errorMessage}
+        </Alert>
+      </Snackbar>
+
       {/* 顶部Logo和主标题、下载按钮分两侧对齐 */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pt: 6, pb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
