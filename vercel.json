@@ -1,15 +1,6 @@
 {
   "version": 2,
   "name": "mindmap-app",
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
   "routes": [
     {
       "src": "/(.*)",
@@ -18,10 +9,5 @@
   ],
   "env": {
     "VITE_DEEPSEEK_API_KEY": "@deepseek_api_key"
-  },
-  "functions": {
-    "dist/**/*.js": {
-      "maxDuration": 30
-    }
   }
 } 
